@@ -1,0 +1,14 @@
+unsloth
+transformers
+accelerate
+peft
+datasets
+timm
+pillow
+faiss-gpu
+torch
+torchvision
+tqdm
+numpy
+scikit-learn
+pyyaml

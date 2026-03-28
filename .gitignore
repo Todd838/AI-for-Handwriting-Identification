@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Models / runs (large)
+*.pt
+*.pth
+*.index
+*.npy
+checkpoints/
+runs/
+wandb/
+
+# Data (never commit datasets)
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+data/
+anyscript/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.pem
