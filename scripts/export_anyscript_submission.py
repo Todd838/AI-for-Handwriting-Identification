@@ -23,6 +23,7 @@ from data_anyscript import (
     resolve_competition_ids,
     write_anyscript_submission_csv,
 )
+from modeling_writer import add_vision_backbone_cli_args
 
 
 def parse_args():
@@ -70,6 +71,7 @@ def parse_args():
     p.add_argument("--model_name", type=str, default=None)
     p.add_argument("--no_unsloth", action="store_true")
     p.add_argument("--load_in_4bit", action="store_true")
+    add_vision_backbone_cli_args(p)
     return p.parse_args()
 
 
@@ -101,7 +103,12 @@ def meta_page_keys(meta: np.ndarray, key_root: str) -> List[str]:
 def load_checkpoint_bundle(args):
     import torch
     from export_embeddings_split import embed_records
-    from modeling_writer import WriterEmbeddingHead, get_backbone_hidden_size, load_vision_backbone
+    from modeling_writer import (
+        WriterEmbeddingHead,
+        get_backbone_hidden_size,
+        load_vision_backbone,
+        vision_backbone_kwargs_from_args,
+    )
 
     if not args.gallery_data_root or not args.query_data_root:
         raise ValueError("--checkpoint requires --gallery_data_root and --query_data_root")
@@ -112,6 +119,7 @@ def load_checkpoint_bundle(args):
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
+        **vision_backbone_kwargs_from_args(args),
     )
     model = model.to(device)
     model.eval()

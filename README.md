@@ -8,7 +8,14 @@ This project provides an end-to-end training and retrieval pipeline for the AnyS
 - Optional LoRA adaptation support
 - FAISS index building and retrieval evaluation
 
-Optional: set `ANYSCRIPT_FILTERED_ARCHIVE` to your local `.tar.gz` path (not committed). Defaults are empty in a fresh clone.
+`ANYSCRIPT_FILTERED_ARCHIVE` env overrides the default archive path in `scripts/data_anyscript.py` (useful on other machines / Colab).
+
+## DeepSeek-OCR 2 (Unsloth + Transformers)
+
+- **Config / prompts / recommended decoding:** `scripts/deepseek_ocr2_config.py` (`RECOMMENDED_DECODING`, prompt presets, infer `base_size` / `image_size` presets).
+- **Load + `infer` wrapper:** `scripts/deepseek_ocr2.py` (`snapshot_download`, Unsloth `FastVisionModel` with `auto_model=AutoModel`, optional Transformers fallback, `run_deepseek_infer`).
+- **OCR CLI:** `scripts/deepseek_ocr2_infer.py` — run `model.infer(tokenizer, ...)` on an image (see `--help`).
+- **Writer retrieval (triplet / FAISS / submission):** pass `--backbone deepseek_ocr2` and `--model_name` (HF id or local path), or rely on **auto** when `model_name` contains `DeepSeek` and `OCR`. Optional: `--deepseek_download --deepseek_local_dir ./weights` to snapshot `unsloth/DeepSeek-OCR-2`. Training still uses **pooled vision features** + triplet loss (not OCR text loss). If feature extraction fails on your checkpoint revision, use GLM-OCR or extend `extract_pooled_features` for that architecture.
 
 ## Expected dataset layout
 
@@ -23,6 +30,8 @@ anyscript/
 ```
 
 ## Quick start (Colab)
+
+**Opening from GitHub in Colab:** the file browser only lists **`.ipynb`** files in the repo. Use path `colab_quickstart.ipynb`, or ignore that UI and run `git clone https://github.com/Todd838/AI-for-Handwriting-Identification.git` in a code cell (see notebook). The **Actions** tab on GitHub is unrelated to Colab.
 
 ```bash
 pip install -r requirements.txt

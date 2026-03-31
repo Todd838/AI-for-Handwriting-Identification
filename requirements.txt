@@ -5,7 +5,12 @@ peft
 datasets
 timm
 pillow
-faiss-gpu
+huggingface_hub
+einops
+addict
+easydict
+# faiss-gpu has no pip wheels on Windows; use faiss-cpu (same API, CPU-only). On Linux+CUDA you can try: pip install faiss-gpu
+faiss-cpu
 torch
 torchvision
 tqdm

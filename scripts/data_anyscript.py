@@ -31,13 +31,13 @@ ANYSCRIPT_SUBMISSION_FIELDS = (
     "similarity_score",
 )
 
-# Default .tar.gz path only if set here; prefer env ANYSCRIPT_FILTERED_ARCHIVE (see README).
-ANYSCRIPT_FILTERED_ARCHIVE_DEFAULT = ""
+# Local AnyScript filtered archive. Override with env ANYSCRIPT_FILTERED_ARCHIVE.
+ANYSCRIPT_FILTERED_ARCHIVE_DEFAULT = r"C:\Users\thisb\Downloads\AnyScriptFiltered.tar.gz"
 
 
 def anyscript_filtered_archive_path() -> str:
     """Path to AnyScriptFiltered.tar.gz (ICDAR 2026 AnyScript release)."""
-    return os.environ.get("ANYSCRIPT_FILTERED_ARCHIVE") or ANYSCRIPT_FILTERED_ARCHIVE_DEFAULT
+    return os.environ.get("ANYSCRIPT_FILTERED_ARCHIVE", ANYSCRIPT_FILTERED_ARCHIVE_DEFAULT)
 
 
 def suggested_extract_root(archive_path: Optional[str] = None) -> str:

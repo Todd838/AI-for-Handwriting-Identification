@@ -10,7 +10,14 @@ from tqdm import tqdm
 
 from data_anyscript import PageRecord, build_records, group_by_author
 from data_anyscript_vision import default_transform
-from modeling_writer import WriterEmbeddingHead, encode_batch, get_backbone_hidden_size, load_vision_backbone
+from modeling_writer import (
+    WriterEmbeddingHead,
+    add_vision_backbone_cli_args,
+    encode_batch,
+    get_backbone_hidden_size,
+    load_vision_backbone,
+    vision_backbone_kwargs_from_args,
+)
 
 
 def parse_args():
@@ -25,6 +32,7 @@ def parse_args():
     p.add_argument("--meta_out", type=str, required=True)
     p.add_argument("--no_unsloth", action="store_true")
     p.add_argument("--load_in_4bit", action="store_true")
+    add_vision_backbone_cli_args(p)
     return p.parse_args()
 
 
@@ -51,6 +59,7 @@ def main():
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
+        **vision_backbone_kwargs_from_args(args),
     )
     model = model.to(device)
     model.eval()

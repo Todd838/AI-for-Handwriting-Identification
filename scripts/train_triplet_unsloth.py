@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import time
 
 import torch
 import torch.nn as nn
@@ -11,11 +12,13 @@ from data_anyscript import build_records, group_by_author
 from data_anyscript_vision import TripletPageDataset, default_transform
 from modeling_writer import (
     WriterEmbeddingHead,
+    add_vision_backbone_cli_args,
     extract_pooled_features,
     get_backbone_hidden_size,
     load_vision_backbone,
     maybe_apply_lora,
     triplet_loss,
+    vision_backbone_kwargs_from_args,
 )
 
 
@@ -37,6 +40,13 @@ def parse_args():
     p.add_argument("--use_lora", action="store_true")
     p.add_argument("--lora_r", type=int, default=16)
     p.add_argument("--unfreeze_backbone", action="store_true")
+    p.add_argument(
+        "--max_wall_time_hours",
+        type=float,
+        default=None,
+        help="Stop training after this many wall-clock hours from start of the epoch loop; saves walltime_stop.pt",
+    )
+    add_vision_backbone_cli_args(p)
     return p.parse_args()
 
 
@@ -75,6 +85,7 @@ def main():
         model_name=args.model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
+        **vision_backbone_kwargs_from_args(args),
     )
     backbone = backbone.to(device)
 
@@ -93,14 +104,54 @@ def main():
 
     best_loss = float("inf")
     history = []
+    max_seconds = (
+        args.max_wall_time_hours * 3600.0 if args.max_wall_time_hours is not None else None
+    )
+    t_train_start = time.perf_counter()
+    stopped_for_walltime = False
+
+    def save_ckpt(epoch_idx: int, loss_for_ckpt: float, tag: str):
+        nonlocal best_loss
+        ckpt = {
+            "epoch": epoch_idx,
+            "loss": loss_for_ckpt,
+            "loader": loader_name,
+            "model_name": args.model_name,
+            "head_state_dict": head.state_dict(),
+            "config": vars(args),
+        }
+        if tag == "epoch":
+            torch.save(ckpt, os.path.join(args.output_dir, f"epoch_{epoch_idx}.pt"))
+            if loss_for_ckpt < best_loss:
+                best_loss = loss_for_ckpt
+                torch.save(ckpt, os.path.join(args.output_dir, "best.pt"))
+        else:
+            ckpt["stopped_reason"] = tag
+            torch.save(ckpt, os.path.join(args.output_dir, "walltime_stop.pt"))
 
     for epoch in range(args.epochs):
         backbone.train(args.unfreeze_backbone)
         head.train()
         running = 0.0
+        n_steps = 0
+        last_loss = 0.0
 
         pbar = tqdm(dl, desc=f"epoch {epoch + 1}/{args.epochs}")
         for anchors, positives, negatives in pbar:
+            if max_seconds is not None and (time.perf_counter() - t_train_start) >= max_seconds:
+                save_ckpt(epoch + 1, last_loss, "max_wall_time_hours")
+                stopped_for_walltime = True
+                history.append(
+                    {
+                        "epoch": epoch + 1,
+                        "loss": None,
+                        "stopped_early": True,
+                        "reason": "max_wall_time_hours",
+                        "hours_elapsed": (time.perf_counter() - t_train_start) / 3600.0,
+                    }
+                )
+                break
+
             anchors = anchors.to(device, non_blocking=True)
             positives = positives.to(device, non_blocking=True)
             negatives = negatives.to(device, non_blocking=True)
@@ -119,28 +170,27 @@ def main():
             loss.backward()
             optimizer.step()
 
-            running += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
+            last_loss = loss.item()
+            running += last_loss
+            n_steps += 1
+            pbar.set_postfix(loss=f"{last_loss:.4f}")
 
-        epoch_loss = running / max(1, len(dl))
+        if stopped_for_walltime:
+            break
+
+        epoch_loss = running / max(1, n_steps)
         history.append({"epoch": epoch + 1, "loss": epoch_loss})
 
-        ckpt = {
-            "epoch": epoch + 1,
-            "loss": epoch_loss,
-            "loader": loader_name,
-            "model_name": args.model_name,
-            "head_state_dict": head.state_dict(),
-            "config": vars(args),
-        }
-        torch.save(ckpt, os.path.join(args.output_dir, f"epoch_{epoch + 1}.pt"))
-        if epoch_loss < best_loss:
-            best_loss = epoch_loss
-            torch.save(ckpt, os.path.join(args.output_dir, "best.pt"))
+        save_ckpt(epoch + 1, epoch_loss, "epoch")
 
     with open(os.path.join(args.output_dir, "train_history.json"), "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
 
+    if stopped_for_walltime:
+        print(
+            f"Stopped after {args.max_wall_time_hours} h wall time. "
+            f"See walltime_stop.pt and train_history.json"
+        )
     print(f"Done. Best loss: {best_loss:.6f}")
     print(f"Checkpoints saved to: {args.output_dir}")
 
