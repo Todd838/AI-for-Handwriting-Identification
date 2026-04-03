@@ -15,7 +15,7 @@ import json
 import os
 import random
 from dataclasses import dataclass
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 
@@ -249,6 +249,78 @@ def first_triplet_usable_data_root(candidates: Sequence[str]) -> Optional[str]:
             continue
         if len(by_a) >= 2:
             return root
+    return None
+
+
+def _find_immediate_subdirs_named(
+    start: str,
+    name: str,
+    *,
+    max_depth: int = 14,
+    max_visit: int = 5000,
+    max_hits: int = 48,
+) -> List[str]:
+    """BFS under ``start`` for directories whose basename is ``name`` (bounded work)."""
+    from collections import deque
+
+    out: List[str] = []
+    start = os.path.abspath(start.rstrip(os.sep))
+    if not os.path.isdir(start):
+        return out
+    q: deque = deque([(start, 0)])
+    visited = 0
+    while q and visited < max_visit and len(out) < max_hits:
+        current, depth = q.popleft()
+        visited += 1
+        if depth > max_depth:
+            continue
+        try:
+            names = os.listdir(current)
+        except OSError:
+            continue
+        for entry in names:
+            full = os.path.join(current, entry)
+            try:
+                is_dir = os.path.isdir(full)
+            except OSError:
+                continue
+            if is_dir:
+                if entry == name:
+                    out.append(full)
+                    if len(out) >= max_hits:
+                        return out
+                q.append((full, depth + 1))
+    return out
+
+
+def resolve_colab_data_root(my_drive: str = "/content/drive/MyDrive") -> Optional[str]:
+    """
+    Resolve a folder suitable for triplet training on Colab + Drive.
+
+    Tries fixed paths first, then searches (bounded BFS) for subfolders named
+    ``binarized`` or ``train`` under ``my_drive``.
+    """
+    ordered: List[str] = []
+    seen: Set[str] = set()
+
+    def add(p: str) -> None:
+        if p and p not in seen:
+            seen.add(p)
+            ordered.append(p)
+
+    for p in colab_drive_data_root_candidates(my_drive):
+        add(p)
+    hit = first_triplet_usable_data_root(ordered)
+    if hit:
+        return hit
+
+    if os.path.isdir(my_drive):
+        for label in ("binarized", "train", "Train"):
+            for p in _find_immediate_subdirs_named(my_drive, label):
+                add(p)
+    hit = first_triplet_usable_data_root(ordered)
+    if hit:
+        return hit
     return None
 
 
