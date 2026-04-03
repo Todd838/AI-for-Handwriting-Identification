@@ -41,7 +41,7 @@ python scripts/train_triplet_unsloth.py \
   --output_dir /content/drive/MyDrive/anyscript_runs/run1
 ```
 
-Then build an index:
+Then build an index (images are read **in batches from disk**, so huge galleries do not load all pixels into RAM at once; reduce `--batch_size` if the GPU runs out of memory):
 
 ```bash
 python scripts/build_faiss_index.py \
@@ -50,6 +50,8 @@ python scripts/build_faiss_index.py \
   --index_out /content/drive/MyDrive/anyscript_runs/run1/faiss.index \
   --meta_out /content/drive/MyDrive/anyscript_runs/run1/meta.npy
 ```
+
+`export_embeddings_split.py` and checkpoint mode in `export_anyscript_submission.py` use the same streaming embed path.
 
 Evaluate retrieval:
 

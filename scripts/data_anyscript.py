@@ -192,7 +192,13 @@ class PageRecord:
 
 
 def build_records(data_root: str) -> List[PageRecord]:
+    """
+    Expects either:
+    - {root}/{author}/{book}/<images> (README layout), or
+    - {root}/{author}/<images> (flat release: one implicit book per author).
+    """
     records: List[PageRecord] = []
+    implicit_book = "__default_book__"
     for author_id in sorted(os.listdir(data_root)):
         author_dir = os.path.join(data_root, author_id)
         if not os.path.isdir(author_dir):
@@ -207,6 +213,16 @@ def build_records(data_root: str) -> List[PageRecord]:
                     continue
                 page_path = os.path.join(book_dir, fn)
                 records.append(PageRecord(author_id=author_id, book_id=book_id, page_path=page_path))
+        for fn in sorted(os.listdir(author_dir)):
+            path = os.path.join(author_dir, fn)
+            if not os.path.isfile(path):
+                continue
+            ext = os.path.splitext(fn)[1].lower()
+            if ext not in IMG_EXTS:
+                continue
+            records.append(
+                PageRecord(author_id=author_id, book_id=implicit_book, page_path=path)
+            )
     return records
 
 

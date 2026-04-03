@@ -39,6 +39,7 @@ anyscript/
 # OS
 .DS_Store
 Thumbs.db
+%temp%/
 
 # Secrets
 .env

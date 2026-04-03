@@ -25,7 +25,12 @@ def parse_args():
     p.add_argument("--data_root", type=str, required=True)
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--model_name", type=str, default=None)
-    p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument(
+        "--batch_size",
+        type=int,
+        default=8,
+        help="Pages decoded from disk per forward pass (streaming; lower if GPU OOM).",
+    )
     p.add_argument("--image_size", type=int, default=448)
     p.add_argument("--embed_dim", type=int, default=512)
     p.add_argument("--index_out", type=str, required=True)
@@ -34,17 +39,6 @@ def parse_args():
     p.add_argument("--load_in_4bit", action="store_true")
     add_vision_backbone_cli_args(p)
     return p.parse_args()
-
-
-def _load_pages(records: List[PageRecord], image_size: int):
-    tfm = default_transform(image_size)
-    imgs = []
-    meta = []
-    for r in records:
-        img = Image.open(r.page_path).convert("RGB")
-        imgs.append(tfm(img))
-        meta.append((r.author_id, r.book_id, r.page_path))
-    return imgs, meta
 
 
 def main():
@@ -74,18 +68,21 @@ def main():
     records = build_records(args.data_root)
     by_author = group_by_author(records)
     all_records: List[PageRecord] = [r for pages in by_author.values() for r in pages]
-    imgs, meta = _load_pages(all_records, image_size=args.image_size)
-
-    embeddings = []
-    for i in tqdm(range(0, len(imgs), args.batch_size), desc="embedding pages"):
-        batch = torch.stack(imgs[i : i + args.batch_size], dim=0)
+    tfm = default_transform(args.image_size)
+    index = faiss.IndexFlatIP(args.embed_dim)
+    meta: List[tuple] = []
+    n = len(all_records)
+    for start in tqdm(range(0, n, args.batch_size), desc="embedding pages"):
+        end = min(n, start + args.batch_size)
+        batch_recs = all_records[start:end]
+        tensors = [tfm(Image.open(r.page_path).convert("RGB")) for r in batch_recs]
+        batch = torch.stack(tensors, dim=0)
+        del tensors
         with torch.no_grad():
             emb = encode_batch(model=model, head=head, images=batch, device=device)
-        embeddings.append(emb.cpu().numpy())
-
-    embs = np.concatenate(embeddings, axis=0).astype("float32")
-    index = faiss.IndexFlatIP(args.embed_dim)
-    index.add(embs)
+        index.add(emb.cpu().numpy().astype("float32"))
+        for r in batch_recs:
+            meta.append((r.author_id, r.book_id, r.page_path))
 
     faiss.write_index(index, args.index_out)
     np.save(args.meta_out, np.array(meta, dtype=object))

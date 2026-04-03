@@ -1,7 +1,7 @@
 import argparse
 import os
 import random
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -32,7 +32,12 @@ def parse_args():
     p.add_argument("--model_name", type=str, default=None)
     p.add_argument("--out_dir", type=str, required=True)
     p.add_argument("--query_ratio", type=float, default=0.1)
-    p.add_argument("--batch_size", type=int, default=8)
+    p.add_argument(
+        "--batch_size",
+        type=int,
+        default=8,
+        help="Pages decoded from disk per forward pass (streaming).",
+    )
     p.add_argument("--image_size", type=int, default=448)
     p.add_argument("--embed_dim", type=int, default=512)
     p.add_argument("--no_unsloth", action="store_true")
@@ -59,22 +64,28 @@ def embed_records(
     image_size: int,
     batch_size: int,
     device: torch.device,
-):
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Decode images and embed in batches (constant RAM vs. dataset size; scales to huge galleries)."""
     tfm = default_transform(image_size)
-    imgs = []
-    meta = []
-    for r in records:
-        img = Image.open(r.page_path).convert("RGB")
-        imgs.append(tfm(img))
-        meta.append((r.author_id, r.book_id, r.page_path))
+    n = len(records)
+    d = head.proj[-1].out_features
+    if n == 0:
+        return np.zeros((0, d), dtype=np.float32), np.array([], dtype=object)
 
-    embs = []
-    for i in tqdm(range(0, len(imgs), batch_size), desc="embedding split"):
-        batch = torch.stack(imgs[i : i + batch_size], dim=0)
+    out = np.empty((n, d), dtype=np.float32)
+    meta: List[tuple] = []
+    for start in tqdm(range(0, n, batch_size), desc="embedding records"):
+        end = min(n, start + batch_size)
+        batch_recs = records[start:end]
+        tensors = [tfm(Image.open(r.page_path).convert("RGB")) for r in batch_recs]
+        batch = torch.stack(tensors, dim=0)
+        del tensors
         with torch.no_grad():
             emb = encode_batch(model=model, head=head, images=batch, device=device)
-        embs.append(emb.cpu().numpy())
-    return np.concatenate(embs, axis=0).astype("float32"), np.array(meta, dtype=object)
+        out[start:end] = emb.cpu().numpy().astype(np.float32)
+        for r in batch_recs:
+            meta.append((r.author_id, r.book_id, r.page_path))
+    return out, np.array(meta, dtype=object)
 
 
 def main():
