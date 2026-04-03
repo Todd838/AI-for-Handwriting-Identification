@@ -226,6 +226,32 @@ def build_records(data_root: str) -> List[PageRecord]:
     return records
 
 
+def colab_drive_data_root_candidates(drive_my_drive: str = "/content/drive/MyDrive") -> List[str]:
+    """Ordered paths to try for AnyScript images on Google Colab + Drive."""
+    d = drive_my_drive.rstrip(os.sep)
+    return [
+        f"{d}/AnyScriptFiltered",
+        f"{d}/data/datasets/AnyScriptFiltered/binarized",
+        f"{d}/AnyScriptFiltered/train",
+        f"{d}/AnyScriptFiltered/binarized",
+        f"{d}/datasets/AnyScriptFiltered/binarized",
+    ]
+
+
+def first_triplet_usable_data_root(candidates: Sequence[str]) -> Optional[str]:
+    """First directory where at least two authors each have two or more pages (triplet training)."""
+    for root in candidates:
+        if not root or not os.path.isdir(root):
+            continue
+        try:
+            by_a = group_by_author(build_records(root))
+        except OSError:
+            continue
+        if len(by_a) >= 2:
+            return root
+    return None
+
+
 def group_by_author(records: List[PageRecord]) -> Dict[str, List[PageRecord]]:
     grouped: Dict[str, List[PageRecord]] = {}
     for rec in records:
