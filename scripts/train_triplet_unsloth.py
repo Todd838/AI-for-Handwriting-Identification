@@ -65,7 +65,18 @@ def main():
     records = build_records(args.data_root)
     by_author = group_by_author(records)
     if len(by_author) < 2:
-        raise ValueError("Need at least 2 authors (with >=2 pages each) in data_root.")
+        counts: dict = {}
+        for r in records:
+            counts[r.author_id] = counts.get(r.author_id, 0) + 1
+        n_auth_any = len(counts)
+        n_auth_multi = sum(1 for c in counts.values() if c >= 2)
+        raise ValueError(
+            "Need at least 2 authors with at least 2 pages each for triplet sampling. "
+            f"data_root={args.data_root!r}: {len(records)} pages found; "
+            f"{n_auth_any} authors with any page; {n_auth_multi} authors with 2+ pages. "
+            "Point --data_root at the folder whose direct children are author IDs "
+            "(each folder holds page images or book subfolders with images)."
+        )
 
     ds = TripletPageDataset(
         by_author=by_author,
