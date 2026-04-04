@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from data_anyscript import build_records, group_by_author
+from data_anyscript import build_records, group_by_author, resolve_training_data_root
 from data_anyscript_vision import TripletPageDataset, default_transform
 from modeling_writer import (
     WriterEmbeddingHead,
@@ -24,34 +24,6 @@ from modeling_writer import (
     vision_backbone_kwargs_from_args,
     vision_uses_glm_image_processor,
 )
-
-
-def resolve_training_data_root(cli_value: str) -> str:
-    """
-    Resolve dataset path. Use ``auto`` on Colab to search Drive inside this process
-    (avoids stale ``DATA_ROOT`` from an old notebook kernel).
-    """
-    if cli_value != "auto":
-        return cli_value
-    env = os.environ.get("ANYSCRIPT_DATA_ROOT", "").strip()
-    if env and os.path.isdir(env):
-        print(f"[train] ANYSCRIPT_DATA_ROOT -> {env!r}")
-        return env
-    try:
-        from data_anyscript import resolve_colab_data_root_any
-    except ImportError:
-        resolve_colab_data_root_any = None  # type: ignore
-    if resolve_colab_data_root_any:
-        found = resolve_colab_data_root_any()
-        if found:
-            print(f"[train] --data_root auto -> {found!r}")
-            return found
-    raise ValueError(
-        "--data_root auto: no triplet-usable tree found on Colab Drive. "
-        "Official extract is often .../AnyScriptFiltered/binarized/train (authors live under train/). "
-        "Upload/extract the dataset, run inspect_anyscript_layout.py, set ANYSCRIPT_DATA_ROOT to the "
-        "path it suggests, or: python /content/ai-hw/scripts/diagnose_data_root.py"
-    )
 
 
 def parse_args():

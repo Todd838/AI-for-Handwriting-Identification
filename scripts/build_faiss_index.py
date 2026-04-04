@@ -8,7 +8,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
-from data_anyscript import PageRecord, build_records, group_by_author
+from data_anyscript import PageRecord, build_records, group_by_author, resolve_training_data_root
 from data_anyscript_vision import default_transform
 from modeling_writer import (
     WriterEmbeddingHead,
@@ -24,7 +24,12 @@ from modeling_writer import (
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_root", type=str, required=True)
+    p.add_argument(
+        "--data_root",
+        type=str,
+        required=True,
+        help="Folder whose children are author IDs, or 'auto' (Colab: search Drive in-process).",
+    )
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--model_name", type=str, default=None)
     p.add_argument(
@@ -64,6 +69,7 @@ def main():
             ("--meta_out", args.meta_out),
         )
     )
+    args.data_root = resolve_training_data_root(args.data_root)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(os.path.dirname(args.index_out) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(args.meta_out) or ".", exist_ok=True)

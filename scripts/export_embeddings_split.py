@@ -13,6 +13,7 @@ from data_anyscript import (
     build_records,
     group_by_author,
     random_query_gallery_split,
+    resolve_training_data_root,
 )
 from data_anyscript_vision import default_transform
 from modeling_writer import (
@@ -29,7 +30,12 @@ from modeling_writer import (
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_root", type=str, required=True)
+    p.add_argument(
+        "--data_root",
+        type=str,
+        required=True,
+        help="Folder whose children are author IDs, or 'auto' (Colab: search Drive in-process).",
+    )
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--model_name", type=str, default=None)
     p.add_argument("--out_dir", type=str, required=True)
@@ -102,6 +108,7 @@ def embed_records(
 
 def main():
     args = parse_args()
+    args.data_root = resolve_training_data_root(args.data_root)
     os.makedirs(args.out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

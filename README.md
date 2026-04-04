@@ -55,6 +55,8 @@ python scripts/build_faiss_index.py \
   --meta_out /content/drive/MyDrive/anyscript_runs/run1/meta.npy
 ```
 
+On **Colab**, `build_faiss_index.py` and `export_embeddings_split.py` accept **`--data_root auto`** (same Drive search as training). Do not pass shell placeholders like `{DATA_ROOT}` from `!python` lines.
+
 `export_embeddings_split.py` and checkpoint mode in `export_anyscript_submission.py` use the same streaming embed path.
 
 Evaluate retrieval:
