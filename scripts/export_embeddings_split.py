@@ -63,6 +63,11 @@ def parse_args():
         action="store_true",
         help="Do not seed RNG; split order changes each run (use dict id JSON, not lists).",
     )
+    p.add_argument(
+        "--all_pages",
+        action="store_true",
+        help="Embed every page from data_root before query/gallery split. Default: only authors with 2+ pages.",
+    )
     add_vision_backbone_cli_args(p)
     return p.parse_args()
 
@@ -137,8 +142,11 @@ def main():
     head.eval()
 
     records = build_records(args.data_root)
-    by_author = group_by_author(records)
-    all_records = [r for pages in by_author.values() for r in pages]
+    if args.all_pages:
+        all_records = list(records)
+    else:
+        by_author = group_by_author(records)
+        all_records = [r for pages in by_author.values() for r in pages]
     all_records.sort(key=lambda r: (r.author_id, r.book_id, r.page_path))
     if not args.random_shuffle:
         random.seed(args.shuffle_seed)

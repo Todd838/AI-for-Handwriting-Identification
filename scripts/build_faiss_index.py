@@ -49,6 +49,11 @@ def parse_args():
     p.add_argument("--embed_dim", type=int, default=512)
     p.add_argument("--index_out", type=str, required=True)
     p.add_argument("--meta_out", type=str, required=True)
+    p.add_argument(
+        "--all_pages",
+        action="store_true",
+        help="Index every page from data_root. Default: only authors with 2+ pages (triplet training filter).",
+    )
     p.add_argument("--no_unsloth", action="store_true")
     p.add_argument("--load_in_4bit", action="store_true")
     add_vision_backbone_cli_args(p)
@@ -107,13 +112,20 @@ def main():
     head.eval()
 
     records = build_records(args.data_root)
-    by_author = group_by_author(records)
-    all_records: List[PageRecord] = [r for pages in by_author.values() for r in pages]
+    if args.all_pages:
+        all_records: List[PageRecord] = list(records)
+    else:
+        by_author = group_by_author(records)
+        all_records = [r for pages in by_author.values() for r in pages]
+    print(
+        f"Indexing {len(all_records)} pages "
+        f"({'all' if args.all_pages else 'authors with 2+ pages only'})"
+    )
     tfm = default_transform(args.image_size)
     index = faiss.IndexFlatIP(args.embed_dim)
     meta: List[tuple] = []
     n = len(all_records)
-    for start in tqdm(range(0, n, args.batch_size), desc="embedding pages"):
+    for start in tqdm(range(0, n, args.batch_size), desc="embedding batches"):
         end = min(n, start + args.batch_size)
         batch_recs = all_records[start:end]
         pils = [Image.open(r.page_path).convert("RGB") for r in batch_recs]

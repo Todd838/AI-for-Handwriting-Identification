@@ -55,6 +55,8 @@ python scripts/build_faiss_index.py \
   --meta_out /content/drive/MyDrive/anyscript_runs/run1/meta.npy
 ```
 
+Add **`--all_pages`** to **`build_faiss_index.py`** (and **`export_embeddings_split.py`** for eval splits) to index or embed **every** training page, including authors with only one page. The default keeps the **triplet filter** (authors with 2+ pages only), matching training.
+
 On **Colab**, `build_faiss_index.py` and `export_embeddings_split.py` accept **`--data_root auto`** (same Drive search as training). Literal `{DATA_ROOT}` / `{OUT}` from `!python` lines are coerced when possible (`{DATA_ROOT}` → `auto`; `{OUT}` → env **`ANYSCRIPT_OUT`** or default `/content/drive/MyDrive/anyscript_runs/run1`). Set `ANYSCRIPT_OUT` in Python before `!` commands if your run folder differs.
 
 `export_embeddings_split.py` and checkpoint mode in `export_anyscript_submission.py` use the same streaming embed path.
