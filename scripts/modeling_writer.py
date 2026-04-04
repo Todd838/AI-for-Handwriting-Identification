@@ -218,10 +218,20 @@ def vision_uses_glm_image_processor(model: nn.Module) -> bool:
 
 
 def glm_vision_inputs_from_pils(processor: Any, pil_images: List[Any]) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Run GLM-OCR / Glm46V processor to patch-grid inputs expected by get_image_features."""
+    """Run GLM-OCR / Glm46V inputs for ``get_image_features`` (patch grid + pixel values).
+
+    ``Glm46VProcessor.__call__`` expects ``text`` with ``<|image|>`` per image; for vision-only
+    embedding we use ``processor.image_processor`` when present.
+    """
     if processor is None:
         raise ValueError("GLM-OCR requires the AutoProcessor returned with the vision backbone.")
-    inputs = processor(images=pil_images, return_tensors="pt")
+    image_proc = getattr(processor, "image_processor", None)
+    if image_proc is not None:
+        inputs = image_proc(images=pil_images, return_tensors="pt")
+    else:
+        tok = getattr(processor, "image_token", "<|image|>")
+        text = [tok] * len(pil_images)
+        inputs = processor(images=pil_images, text=text, return_tensors="pt")
     try:
         pv = inputs["pixel_values"]
         grid = inputs["image_grid_thw"]
