@@ -33,7 +33,7 @@ anyscript/
 
 **Opening from GitHub in Colab:** the file browser only lists **`.ipynb`** files in the repo. Use path `colab_quickstart.ipynb`, or ignore that UI and run `git clone https://github.com/Todd838/AI-for-Handwriting-Identification.git` in a code cell (see notebook). The **Actions** tab on GitHub is unrelated to Colab.
 
-If training reports **0 pages** under `--data_root`, images may live deeper (e.g. `MyDrive/data/datasets/AnyScriptFiltered/binarized` after `tar` extract into MyDrive). The **Colab dataset cell** auto-tries common paths; you can still run `python scripts/inspect_anyscript_layout.py /content/drive/MyDrive/AnyScriptFiltered` and set `DATA_ROOT` manually if needed.
+If training reports **0 pages** under `--data_root`, images may live deeper (e.g. `MyDrive/data/datasets/AnyScriptFiltered/binarized/train` after `tar` extract). The **Colab dataset cell** auto-tries common paths; run `python scripts/inspect_anyscript_layout.py` with no arguments on Colab to pick the first existing candidate, or pass a folder explicitly.
 
 ```bash
 pip install -r requirements.txt

@@ -3,7 +3,11 @@
 Find where page images live under a Drive or local folder.
 
 Usage (Colab):
-  python /content/ai-hw/scripts/inspect_anyscript_layout.py /content/drive/MyDrive/AnyScriptFiltered
+  python .../inspect_anyscript_layout.py
+  python .../inspect_anyscript_layout.py /content/drive/MyDrive/AnyScriptFiltered
+
+With no path, picks the first existing folder from the same candidates as training (often
+``.../data/datasets/AnyScriptFiltered/binarized/train`` after ``tar`` extract).
 
 Tries the given path and each immediate subdirectory as data_root and reports page counts.
 If your count is 0 at the top level, set DATA_ROOT to the subdirectory that shows pages.
@@ -14,7 +18,12 @@ import os
 import sys
 
 # Same package as training (run from repo scripts/ or set PYTHONPATH).
-from data_anyscript import build_records, group_by_author, looks_like_anyscript_related_path
+from data_anyscript import (
+    build_records,
+    colab_drive_data_root_candidates,
+    group_by_author,
+    looks_like_anyscript_related_path,
+)
 
 
 def report(label: str, root: str) -> int:
@@ -31,7 +40,12 @@ def report(label: str, root: str) -> int:
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("root", type=str, help="Folder to inspect (e.g. .../AnyScriptFiltered)")
+    p.add_argument(
+        "root",
+        nargs="?",
+        default=None,
+        help="Folder to inspect; default: first existing path under /content/drive/MyDrive",
+    )
     p.add_argument(
         "--max_depth",
         type=int,
@@ -44,12 +58,28 @@ def main() -> None:
         help="Scan all My Drive siblings (can suggest wrong datasets e.g. other Kaggle projects).",
     )
     args = p.parse_args()
-    root = os.path.expanduser(args.root)
-
     print("=== inspect_anyscript_layout ===\n")
+    root = args.root
+    if root:
+        root = os.path.expanduser(root)
+    else:
+        my_drive = "/content/drive/MyDrive"
+        hints = colab_drive_data_root_candidates(my_drive) + [my_drive]
+        root = next((h for h in hints if os.path.isdir(h)), None)
+        if not root:
+            print("ERROR: no dataset folder found under Google Drive.")
+            print("Mount Drive in the notebook, extract AnyScriptFiltered.tar.gz, then retry.")
+            print("Paths checked (same order as --data_root auto):\n")
+            for h in hints:
+                print(f"  exists={os.path.isdir(h)!s:5} {h}")
+            sys.exit(1)
+        print(f"(auto) first existing candidate -> {root!r}\n")
+
     if not os.path.isdir(root):
         print(f"ERROR: not found or not a directory: {root!r}")
-        print("Check Drive mount and path (Colab: /content/drive/MyDrive/...)")
+        print("Mount Drive (Colab: /content/drive/MyDrive). After tar extract, data is often under:")
+        for h in colab_drive_data_root_candidates("/content/drive/MyDrive") + ["/content/drive/MyDrive"]:
+            print(f"  exists={os.path.isdir(h)!s:5} {h}")
         sys.exit(1)
 
     children = sorted(os.listdir(root))
