@@ -43,8 +43,27 @@ def parse_args():
     return p.parse_args()
 
 
+def _reject_placeholder_paths(pairs) -> None:
+    """Colab `!python ... {OUT}/best.pt` passes braces literally — catch before torch.load."""
+    for label, p in pairs:
+        if p and ("{" in p or "}" in p):
+            raise ValueError(
+                f"{label} looks like an unexpanded template: {p!r}. "
+                "Shell lines starting with `!` do not substitute Python variables. "
+                "Use a Python cell with f\"{{OUT}}/best.pt\", or paste the full Drive path."
+            )
+
+
 def main():
     args = parse_args()
+    _reject_placeholder_paths(
+        (
+            ("--data_root", args.data_root),
+            ("--checkpoint", args.checkpoint),
+            ("--index_out", args.index_out),
+            ("--meta_out", args.meta_out),
+        )
+    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(os.path.dirname(args.index_out) or ".", exist_ok=True)
     os.makedirs(os.path.dirname(args.meta_out) or ".", exist_ok=True)
