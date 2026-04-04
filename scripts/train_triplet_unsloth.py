@@ -22,9 +22,41 @@ from modeling_writer import (
 )
 
 
+def resolve_training_data_root(cli_value: str) -> str:
+    """
+    Resolve dataset path. Use ``auto`` on Colab to search Drive inside this process
+    (avoids stale ``DATA_ROOT`` from an old notebook kernel).
+    """
+    if cli_value != "auto":
+        return cli_value
+    env = os.environ.get("ANYSCRIPT_DATA_ROOT", "").strip()
+    if env and os.path.isdir(env):
+        print(f"[train] ANYSCRIPT_DATA_ROOT -> {env!r}")
+        return env
+    try:
+        from data_anyscript import resolve_colab_data_root_any
+    except ImportError:
+        resolve_colab_data_root_any = None  # type: ignore
+    if resolve_colab_data_root_any:
+        found = resolve_colab_data_root_any()
+        if found:
+            print(f"[train] --data_root auto -> {found!r}")
+            return found
+    raise ValueError(
+        "--data_root auto: no triplet-usable tree found on Colab Drive. "
+        "Upload/extract the dataset to My Drive (or a shared drive), or set ANYSCRIPT_DATA_ROOT. "
+        "Run: python /content/ai-hw/scripts/diagnose_data_root.py"
+    )
+
+
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data_root", type=str, required=True)
+    p.add_argument(
+        "--data_root",
+        type=str,
+        required=True,
+        help="Folder whose children are author IDs, or 'auto' (Colab: search Drive in-process).",
+    )
     p.add_argument("--model_name", type=str, default="THUDM/glm-ocr")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--image_size", type=int, default=448)
@@ -59,6 +91,7 @@ def collate_fn(batch):
 
 def main():
     args = parse_args()
+    args.data_root = resolve_training_data_root(args.data_root)
     os.makedirs(args.output_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -75,7 +108,9 @@ def main():
             f"data_root={args.data_root!r}: {len(records)} pages found; "
             f"{n_auth_any} authors with any page; {n_auth_multi} authors with 2+ pages. "
             "Point --data_root at the folder whose direct children are author IDs "
-            "(each folder holds page images or book subfolders with images)."
+            "(each folder holds page images or book subfolders with images). "
+            "On Colab try: --data_root auto  OR  "
+            "python /content/ai-hw/scripts/diagnose_data_root.py"
         )
 
     ds = TripletPageDataset(

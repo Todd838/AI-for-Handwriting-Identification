@@ -324,6 +324,33 @@ def resolve_colab_data_root(my_drive: str = "/content/drive/MyDrive") -> Optiona
     return None
 
 
+def colab_drive_search_bases() -> List[str]:
+    """Colab mount points to try when looking for the dataset (My Drive + shared drives)."""
+    bases: List[str] = ["/content/drive/MyDrive"]
+    legacy = "/content/drive/MyDrive/My Drive"
+    if os.path.isdir(legacy):
+        bases.append(legacy)
+    shared = "/content/drive/Shareddrives"
+    if os.path.isdir(shared):
+        try:
+            for n in sorted(os.listdir(shared))[:16]:
+                p = os.path.join(shared, n)
+                if os.path.isdir(p):
+                    bases.append(p)
+        except OSError:
+            pass
+    return bases
+
+
+def resolve_colab_data_root_any() -> Optional[str]:
+    """Try :func:`resolve_colab_data_root` on each Colab Drive base."""
+    for base in colab_drive_search_bases():
+        hit = resolve_colab_data_root(base)
+        if hit:
+            return hit
+    return None
+
+
 def group_by_author(records: List[PageRecord]) -> Dict[str, List[PageRecord]]:
     grouped: Dict[str, List[PageRecord]] = {}
     for rec in records:
