@@ -25,6 +25,23 @@ from data_anyscript import (
     looks_like_anyscript_related_path,
 )
 
+_COLAB_DRIVE = "/content/drive"
+_COLAB_MY_DRIVE = "/content/drive/MyDrive"
+
+
+def _print_colab_drive_mount_help() -> None:
+    """If My Drive is missing, explain mount (everything shows exists=False otherwise)."""
+    if os.path.isdir(_COLAB_MY_DRIVE):
+        return
+    print("*** Google Drive is not available at /content/drive/MyDrive ***\n")
+    if not os.path.isdir(_COLAB_DRIVE):
+        print("Mount Drive in Colab before this script. In a notebook cell, run:\n")
+        print("    from google.colab import drive")
+        print("    drive.mount('/content/drive')\n")
+    else:
+        print("/content/drive exists but MyDrive is missing — complete the mount dialog / auth.\n")
+    print("Then re-run the dataset cell (extract .tar.gz) and this inspector.\n")
+
 
 def report(label: str, root: str) -> int:
     if not os.path.isdir(root):
@@ -68,7 +85,7 @@ def main() -> None:
         root = next((h for h in hints if os.path.isdir(h)), None)
         if not root:
             print("ERROR: no dataset folder found under Google Drive.")
-            print("Mount Drive in the notebook, extract AnyScriptFiltered.tar.gz, then retry.")
+            _print_colab_drive_mount_help()
             print("Paths checked (same order as --data_root auto):\n")
             for h in hints:
                 print(f"  exists={os.path.isdir(h)!s:5} {h}")
@@ -77,8 +94,10 @@ def main() -> None:
 
     if not os.path.isdir(root):
         print(f"ERROR: not found or not a directory: {root!r}")
-        print("Mount Drive (Colab: /content/drive/MyDrive). After tar extract, data is often under:")
-        for h in colab_drive_data_root_candidates("/content/drive/MyDrive") + ["/content/drive/MyDrive"]:
+        _print_colab_drive_mount_help()
+        if os.path.isdir(_COLAB_MY_DRIVE):
+            print("Drive is mounted; that path may be wrong. After tar extract, images are often under:\n")
+        for h in colab_drive_data_root_candidates(_COLAB_MY_DRIVE) + [_COLAB_MY_DRIVE]:
             print(f"  exists={os.path.isdir(h)!s:5} {h}")
         sys.exit(1)
 
