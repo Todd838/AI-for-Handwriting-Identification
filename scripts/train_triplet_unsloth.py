@@ -58,7 +58,12 @@ def parse_args():
         required=True,
         help="Folder whose children are author IDs, or 'auto' (Colab: search Drive in-process).",
     )
-    p.add_argument("--model_name", type=str, default="THUDM/glm-ocr")
+    p.add_argument(
+        "--model_name",
+        type=str,
+        default="zai-org/GLM-OCR",
+        help="HF vision model id. Public GLM-OCR: zai-org/GLM-OCR (THUDM/glm-ocr often 401 without access).",
+    )
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--image_size", type=int, default=448)
     p.add_argument("--embed_dim", type=int, default=512)

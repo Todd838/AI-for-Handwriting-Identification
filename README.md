@@ -35,11 +35,13 @@ anyscript/
 
 If training reports **0 pages** under `--data_root`, images may live deeper (e.g. `MyDrive/data/datasets/AnyScriptFiltered/binarized/train` after `tar` extract). The **Colab dataset cell** auto-tries common paths; run `python scripts/inspect_anyscript_layout.py` with no arguments on Colab to pick the first existing candidate, or pass a folder explicitly.
 
+**Hugging Face:** the default vision model is **`zai-org/GLM-OCR`** (public). **`THUDM/glm-ocr`** often returns **401** unless you have hub access; use `huggingface-cli login` or stay on `zai-org/GLM-OCR`. GLM-OCR needs a **recent** `transformers` (see `requirements.txt`).
+
 ```bash
 pip install -r requirements.txt
 python scripts/train_triplet_unsloth.py \
   --data_root /content/drive/MyDrive/anyscript \
-  --model_name THUDM/glm-ocr \
+  --model_name zai-org/GLM-OCR \
   --output_dir /content/drive/MyDrive/anyscript_runs/run1
 ```
 

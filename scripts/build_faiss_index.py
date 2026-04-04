@@ -48,7 +48,7 @@ def main():
     os.makedirs(os.path.dirname(args.meta_out) or ".", exist_ok=True)
 
     ckpt = torch.load(args.checkpoint, map_location="cpu")
-    model_name = args.model_name or ckpt.get("model_name", "THUDM/glm-ocr")
+    model_name = args.model_name or ckpt.get("model_name", "zai-org/GLM-OCR")
     model, _, _ = load_vision_backbone(
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,

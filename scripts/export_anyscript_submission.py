@@ -114,7 +114,7 @@ def load_checkpoint_bundle(args):
         raise ValueError("--checkpoint requires --gallery_data_root and --query_data_root")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = torch.load(args.checkpoint, map_location="cpu")
-    model_name = args.model_name or ckpt.get("model_name", "THUDM/glm-ocr")
+    model_name = args.model_name or ckpt.get("model_name", "zai-org/GLM-OCR")
     model, _, _ = load_vision_backbone(
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,

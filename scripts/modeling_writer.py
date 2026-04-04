@@ -45,6 +45,18 @@ def _try_unsloth_vision(model_name: str, load_in_4bit: bool):
 
 
 def _fallback_transformers_vision(model_name: str):
+    """HF fallback. GLM-OCR uses AutoModelForImageTextToText (not AutoModel / AutoImageProcessor)."""
+    mn = model_name.lower()
+    if "glm" in mn and "ocr" in mn:
+        from transformers import AutoModelForImageTextToText, AutoProcessor
+
+        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+        model = AutoModelForImageTextToText.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+        )
+        return model, processor
+
     from transformers import AutoImageProcessor, AutoModel
 
     processor = AutoImageProcessor.from_pretrained(model_name, trust_remote_code=True)
