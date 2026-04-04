@@ -40,9 +40,12 @@ ARCHIVE_PATHS = [
 ]
 FIXED_CANDIDATES = [
     f"{EXTRACT_PARENT}/AnyScriptFiltered",
+    f"{EXTRACT_PARENT}/data/datasets/AnyScriptFiltered/binarized/train",
     f"{EXTRACT_PARENT}/data/datasets/AnyScriptFiltered/binarized",
+    f"{EXTRACT_PARENT}/AnyScriptFiltered/binarized/train",
     f"{EXTRACT_PARENT}/AnyScriptFiltered/train",
     f"{EXTRACT_PARENT}/AnyScriptFiltered/binarized",
+    f"{EXTRACT_PARENT}/datasets/AnyScriptFiltered/binarized/train",
     f"{EXTRACT_PARENT}/datasets/AnyScriptFiltered/binarized",
 ]
 

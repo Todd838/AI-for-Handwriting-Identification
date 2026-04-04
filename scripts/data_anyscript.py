@@ -253,11 +253,16 @@ def colab_anyscript_archive_candidates(drive_my_drive: str = "/content/drive/MyD
 def colab_drive_data_root_candidates(drive_my_drive: str = "/content/drive/MyDrive") -> List[str]:
     """Ordered paths to try for AnyScript images on Google Colab + Drive."""
     d = drive_my_drive.rstrip(os.sep)
+    # Official tarball often creates .../binarized/train (authors are under train/).
+    # Try train *before* binarized alone — build_records(binarized) sees only one child "train".
     return [
         f"{d}/AnyScriptFiltered",
+        f"{d}/data/datasets/AnyScriptFiltered/binarized/train",
         f"{d}/data/datasets/AnyScriptFiltered/binarized",
+        f"{d}/AnyScriptFiltered/binarized/train",
         f"{d}/AnyScriptFiltered/train",
         f"{d}/AnyScriptFiltered/binarized",
+        f"{d}/datasets/AnyScriptFiltered/binarized/train",
         f"{d}/datasets/AnyScriptFiltered/binarized",
     ]
 

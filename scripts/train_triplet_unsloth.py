@@ -44,8 +44,9 @@ def resolve_training_data_root(cli_value: str) -> str:
             return found
     raise ValueError(
         "--data_root auto: no triplet-usable tree found on Colab Drive. "
-        "Upload/extract the dataset to My Drive (or a shared drive), or set ANYSCRIPT_DATA_ROOT. "
-        "Run: python /content/ai-hw/scripts/diagnose_data_root.py"
+        "Official extract is often .../AnyScriptFiltered/binarized/train (authors live under train/). "
+        "Upload/extract the dataset, run inspect_anyscript_layout.py, set ANYSCRIPT_DATA_ROOT to the "
+        "path it suggests, or: python /content/ai-hw/scripts/diagnose_data_root.py"
     )
 
 
