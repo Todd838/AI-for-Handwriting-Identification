@@ -27,6 +27,25 @@ def triplet_loss(anchor: torch.Tensor, positive: torch.Tensor, negative: torch.T
     return torch.relu(pos_dist - neg_dist + margin).mean()
 
 
+# Public HF weights; THUDM/glm-ocr returns 401 for most users (gated / legacy id).
+_PUBLIC_GLM_OCR_HUB = "zai-org/GLM-OCR"
+_LEGACY_GLM_OCR_HUB = "thudm/glm-ocr"
+
+
+def normalize_glm_ocr_hub_id(model_name: str) -> str:
+    """Map legacy THUDM/glm-ocr to zai-org/GLM-OCR so old Colab commands still work."""
+    if not model_name:
+        return model_name
+    key = model_name.strip().lower().replace("_", "-")
+    if key == _LEGACY_GLM_OCR_HUB:
+        print(
+            f"[vision] remapping legacy hub id {model_name!r} -> {_PUBLIC_GLM_OCR_HUB!r} "
+            "(THUDM/glm-ocr requires HF access; zai-org/GLM-OCR is public)"
+        )
+        return _PUBLIC_GLM_OCR_HUB
+    return model_name.strip()
+
+
 def _unsloth_runtime_supported() -> bool:
     """Unsloth initializes only with a CUDA GPU on standard Windows/Linux wheels."""
     return bool(torch.cuda.is_available())
@@ -83,6 +102,7 @@ def load_vision_backbone(
     deepseek_download: bool = False,
     deepseek_flash_attention: bool = False,
 ) -> Tuple[nn.Module, object, str]:
+    model_name = normalize_glm_ocr_hub_id(model_name)
     kind = _resolve_backbone_kind(backbone, model_name)
 
     if kind == "deepseek_ocr2":

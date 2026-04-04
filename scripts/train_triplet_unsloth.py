@@ -17,6 +17,7 @@ from modeling_writer import (
     get_backbone_hidden_size,
     load_vision_backbone,
     maybe_apply_lora,
+    normalize_glm_ocr_hub_id,
     triplet_loss,
     vision_backbone_kwargs_from_args,
 )
@@ -98,6 +99,7 @@ def collate_fn(batch):
 def main():
     args = parse_args()
     args.data_root = resolve_training_data_root(args.data_root)
+    args.model_name = normalize_glm_ocr_hub_id(args.model_name)
     os.makedirs(args.output_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
