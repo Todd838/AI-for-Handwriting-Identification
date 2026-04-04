@@ -8,7 +8,13 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
-from data_anyscript import PageRecord, build_records, group_by_author, resolve_training_data_root
+from data_anyscript import (
+    PageRecord,
+    build_records,
+    coerce_cli_data_root,
+    group_by_author,
+    resolve_training_data_root,
+)
 from data_anyscript_vision import default_transform
 from modeling_writer import (
     WriterEmbeddingHead,
@@ -55,12 +61,15 @@ def _reject_placeholder_paths(pairs) -> None:
             raise ValueError(
                 f"{label} looks like an unexpanded template: {p!r}. "
                 "Shell lines starting with `!` do not substitute Python variables. "
-                "Use a Python cell with f\"{{OUT}}/best.pt\", or paste the full Drive path."
+                "For --data_root use the word auto or a full path (not {{DATA_ROOT}}). "
+                "For checkpoint and outputs use real paths or a Python subprocess with f-strings."
             )
 
 
 def main():
     args = parse_args()
+    # Must run before _reject: resolve_training_data_root also coerces, but runs later.
+    args.data_root = coerce_cli_data_root(args.data_root)
     _reject_placeholder_paths(
         (
             ("--data_root", args.data_root),

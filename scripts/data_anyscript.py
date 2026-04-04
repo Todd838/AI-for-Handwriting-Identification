@@ -383,11 +383,29 @@ def resolve_colab_data_root_any() -> Optional[str]:
     return None
 
 
+_DATA_ROOT_CLI_PLACEHOLDERS = frozenset(
+    ("{data_root}", "$data_root", "%data_root%")
+)
+
+
+def coerce_cli_data_root(cli_value: str) -> str:
+    """
+    Colab ``!python ... --data_root {DATA_ROOT}`` passes the literal braces.
+    Treat those tokens as ``auto`` so the same (broken) incantation still works.
+    """
+    s = cli_value.strip().strip("'\"")
+    if s.lower() in _DATA_ROOT_CLI_PLACEHOLDERS:
+        print(f"[data] treating --data_root {cli_value!r} as 'auto' (shell did not expand the variable)")
+        return "auto"
+    return cli_value.strip()
+
+
 def resolve_training_data_root(cli_value: str) -> str:
     """
     Resolve dataset path. Use ``auto`` on Colab to search Drive inside this process
     (avoids stale ``DATA_ROOT`` from an old notebook kernel).
     """
+    cli_value = coerce_cli_data_root(cli_value)
     if cli_value != "auto":
         return cli_value
     env = os.environ.get("ANYSCRIPT_DATA_ROOT", "").strip()
