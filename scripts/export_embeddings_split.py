@@ -11,6 +11,8 @@ from tqdm import tqdm
 from data_anyscript import (
     PageRecord,
     build_records,
+    coerce_cli_data_root,
+    expand_colab_out_template,
     group_by_author,
     random_query_gallery_split,
     resolve_training_data_root,
@@ -108,6 +110,9 @@ def embed_records(
 
 def main():
     args = parse_args()
+    args.data_root = coerce_cli_data_root(args.data_root)
+    args.checkpoint = expand_colab_out_template(args.checkpoint)
+    args.out_dir = expand_colab_out_template(args.out_dir)
     args.data_root = resolve_training_data_root(args.data_root)
     os.makedirs(args.out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

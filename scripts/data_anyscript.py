@@ -14,6 +14,7 @@ import csv
 import json
 import os
 import random
+import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Union
 
@@ -386,6 +387,32 @@ def resolve_colab_data_root_any() -> Optional[str]:
 _DATA_ROOT_CLI_PLACEHOLDERS = frozenset(
     ("{data_root}", "$data_root", "%data_root%")
 )
+
+
+# Default training --output_dir in colab_quickstart.ipynb (override with env ANYSCRIPT_OUT).
+_DEFAULT_ANYSCRIPT_RUN_DIR = "/content/drive/MyDrive/anyscript_runs/run1"
+_OUT_TEMPLATE_PATTERN = re.compile(r"\{OUT\}", re.IGNORECASE)
+
+
+def expand_colab_out_template(path: str) -> str:
+    """
+    Colab ``!python ... --checkpoint '{OUT}/best.pt'`` leaves ``{OUT}`` literal.
+    Expand using env ``ANYSCRIPT_OUT`` (set in a notebook: ``os.environ[\"ANYSCRIPT_OUT\"] = OUT``)
+    or the default run dir below if unset.
+    """
+    if not path or _OUT_TEMPLATE_PATTERN.search(path) is None:
+        return path
+    base = os.environ.get("ANYSCRIPT_OUT", "").strip()
+    if not base:
+        base = _DEFAULT_ANYSCRIPT_RUN_DIR
+        print(
+            f"[data] expanding {{OUT}} using default {base!r} "
+            "(set ANYSCRIPT_OUT to match your training --output_dir if different)"
+        )
+    else:
+        print(f"[data] expanding {{OUT}} using ANYSCRIPT_OUT={base!r}")
+    root = base.rstrip("/")
+    return _OUT_TEMPLATE_PATTERN.sub(root, path)
 
 
 def coerce_cli_data_root(cli_value: str) -> str:

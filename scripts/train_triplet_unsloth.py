@@ -9,7 +9,12 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from data_anyscript import build_records, group_by_author, resolve_training_data_root
+from data_anyscript import (
+    build_records,
+    expand_colab_out_template,
+    group_by_author,
+    resolve_training_data_root,
+)
 from data_anyscript_vision import TripletPageDataset, default_transform
 from modeling_writer import (
     WriterEmbeddingHead,
@@ -82,6 +87,7 @@ def collate_path_triplets(batch):
 
 def main():
     args = parse_args()
+    args.output_dir = expand_colab_out_template(args.output_dir)
     args.data_root = resolve_training_data_root(args.data_root)
     args.model_name = normalize_glm_ocr_hub_id(args.model_name)
     os.makedirs(args.output_dir, exist_ok=True)

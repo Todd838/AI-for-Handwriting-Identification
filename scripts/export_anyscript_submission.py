@@ -18,6 +18,7 @@ import numpy as np
 from data_anyscript import (
     book_key,
     build_records,
+    expand_colab_out_template,
     iter_dense_submission_rows,
     page_relative_key,
     resolve_competition_ids,
@@ -173,6 +174,15 @@ def load_embeddings_dir(d: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.
 
 def main():
     args = parse_args()
+    args.out_csv = expand_colab_out_template(args.out_csv)
+    if args.checkpoint:
+        args.checkpoint = expand_colab_out_template(args.checkpoint)
+    if args.gallery_data_root:
+        args.gallery_data_root = expand_colab_out_template(args.gallery_data_root)
+    if args.query_data_root:
+        args.query_data_root = expand_colab_out_template(args.query_data_root)
+    if args.embeddings_dir:
+        args.embeddings_dir = expand_colab_out_template(args.embeddings_dir)
     os.makedirs(os.path.dirname(os.path.abspath(args.out_csv)) or ".", exist_ok=True)
 
     if args.embeddings_dir:

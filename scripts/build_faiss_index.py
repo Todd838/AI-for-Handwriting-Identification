@@ -12,6 +12,7 @@ from data_anyscript import (
     PageRecord,
     build_records,
     coerce_cli_data_root,
+    expand_colab_out_template,
     group_by_author,
     resolve_training_data_root,
 )
@@ -70,6 +71,9 @@ def main():
     args = parse_args()
     # Must run before _reject: resolve_training_data_root also coerces, but runs later.
     args.data_root = coerce_cli_data_root(args.data_root)
+    args.checkpoint = expand_colab_out_template(args.checkpoint)
+    args.index_out = expand_colab_out_template(args.index_out)
+    args.meta_out = expand_colab_out_template(args.meta_out)
     _reject_placeholder_paths(
         (
             ("--data_root", args.data_root),
