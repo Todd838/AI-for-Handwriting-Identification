@@ -20,8 +20,10 @@ from modeling_writer import (
     add_vision_backbone_cli_args,
     encode_batch,
     get_backbone_hidden_size,
+    glm_vision_inputs_from_pils,
     load_vision_backbone,
     vision_backbone_kwargs_from_args,
+    vision_uses_glm_image_processor,
 )
 
 
@@ -64,6 +66,8 @@ def embed_records(
     image_size: int,
     batch_size: int,
     device: torch.device,
+    hf_processor=None,
+    use_glm: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Decode images and embed in batches (constant RAM vs. dataset size; scales to huge galleries)."""
     tfm = default_transform(image_size)
@@ -77,11 +81,19 @@ def embed_records(
     for start in tqdm(range(0, n, batch_size), desc="embedding records"):
         end = min(n, start + batch_size)
         batch_recs = records[start:end]
-        tensors = [tfm(Image.open(r.page_path).convert("RGB")) for r in batch_recs]
-        batch = torch.stack(tensors, dim=0)
-        del tensors
+        pils = [Image.open(r.page_path).convert("RGB") for r in batch_recs]
+        if use_glm:
+            batch, grid = glm_vision_inputs_from_pils(hf_processor, pils)
+        else:
+            tensors = [tfm(p) for p in pils]
+            batch = torch.stack(tensors, dim=0)
+            del tensors
+            grid = None
+        del pils
         with torch.no_grad():
-            emb = encode_batch(model=model, head=head, images=batch, device=device)
+            emb = encode_batch(
+                model=model, head=head, images=batch, device=device, image_grid_thw=grid
+            )
         out[start:end] = emb.cpu().numpy().astype(np.float32)
         for r in batch_recs:
             meta.append((r.author_id, r.book_id, r.page_path))
@@ -95,13 +107,14 @@ def main():
 
     ckpt = torch.load(args.checkpoint, map_location="cpu")
     model_name = args.model_name or ckpt.get("model_name", "zai-org/GLM-OCR")
-    model, _, _ = load_vision_backbone(
+    model, hf_processor, _ = load_vision_backbone(
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
         **vision_backbone_kwargs_from_args(args),
     )
     model = model.to(device)
+    use_glm = vision_uses_glm_image_processor(model)
     model.eval()
     for p in model.parameters():
         p.requires_grad = False
@@ -120,10 +133,24 @@ def main():
     query_records, gallery_records = random_query_gallery_split(all_records, query_ratio=args.query_ratio)
 
     query_embs, query_meta = embed_records(
-        query_records, model, head, args.image_size, args.batch_size, device
+        query_records,
+        model,
+        head,
+        args.image_size,
+        args.batch_size,
+        device,
+        hf_processor=hf_processor,
+        use_glm=use_glm,
     )
     gallery_embs, gallery_meta = embed_records(
-        gallery_records, model, head, args.image_size, args.batch_size, device
+        gallery_records,
+        model,
+        head,
+        args.image_size,
+        args.batch_size,
+        device,
+        hf_processor=hf_processor,
+        use_glm=use_glm,
     )
 
     np.save(os.path.join(args.out_dir, "query_embs.npy"), query_embs)

@@ -3,6 +3,7 @@ import json
 import os
 import time
 
+from PIL import Image
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -15,11 +16,13 @@ from modeling_writer import (
     add_vision_backbone_cli_args,
     extract_pooled_features,
     get_backbone_hidden_size,
+    glm_vision_inputs_from_pils,
     load_vision_backbone,
     maybe_apply_lora,
     normalize_glm_ocr_hub_id,
     triplet_loss,
     vision_backbone_kwargs_from_args,
+    vision_uses_glm_image_processor,
 )
 
 
@@ -89,11 +92,20 @@ def parse_args():
     return p.parse_args()
 
 
-def collate_fn(batch):
+def collate_stacked_tensors(batch):
     anchors = torch.stack([x["anchor"] for x in batch], dim=0)
     positives = torch.stack([x["positive"] for x in batch], dim=0)
     negatives = torch.stack([x["negative"] for x in batch], dim=0)
     return anchors, positives, negatives
+
+
+def collate_path_triplets(batch):
+    """For GLM-OCR: avoid loading/processing images in worker processes."""
+    return (
+        [x["anchor_path"] for x in batch],
+        [x["positive_path"] for x in batch],
+        [x["negative_path"] for x in batch],
+    )
 
 
 def main():
@@ -121,27 +133,29 @@ def main():
             "python /content/ai-hw/scripts/diagnose_data_root.py"
         )
 
-    ds = TripletPageDataset(
-        by_author=by_author,
-        transform=default_transform(args.image_size),
-        steps_per_epoch=args.steps_per_epoch,
-    )
-    dl = DataLoader(
-        ds,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        collate_fn=collate_fn,
-    )
-
-    backbone, _, loader_name = load_vision_backbone(
+    backbone, hf_processor, loader_name = load_vision_backbone(
         model_name=args.model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
         **vision_backbone_kwargs_from_args(args),
     )
     backbone = backbone.to(device)
+    use_glm_images = vision_uses_glm_image_processor(backbone)
+
+    ds = TripletPageDataset(
+        by_author=by_author,
+        transform=None if use_glm_images else default_transform(args.image_size),
+        steps_per_epoch=args.steps_per_epoch,
+        skip_pixel_tensors=use_glm_images,
+    )
+    dl = DataLoader(
+        ds,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=not use_glm_images,
+        collate_fn=collate_path_triplets if use_glm_images else collate_stacked_tensors,
+    )
 
     if args.use_lora:
         backbone = maybe_apply_lora(backbone, lora_r=args.lora_r)
@@ -206,14 +220,31 @@ def main():
                 )
                 break
 
-            anchors = anchors.to(device, non_blocking=True)
-            positives = positives.to(device, non_blocking=True)
-            negatives = negatives.to(device, non_blocking=True)
-
-            with torch.set_grad_enabled(args.unfreeze_backbone):
-                feat_a = extract_pooled_features(backbone, anchors)
-                feat_p = extract_pooled_features(backbone, positives)
-                feat_n = extract_pooled_features(backbone, negatives)
+            if use_glm_images:
+                pils_a = [Image.open(p).convert("RGB") for p in anchors]
+                pils_p = [Image.open(p).convert("RGB") for p in positives]
+                pils_n = [Image.open(p).convert("RGB") for p in negatives]
+                pv_a, g_a = glm_vision_inputs_from_pils(hf_processor, pils_a)
+                pv_p, g_p = glm_vision_inputs_from_pils(hf_processor, pils_p)
+                pv_n, g_n = glm_vision_inputs_from_pils(hf_processor, pils_n)
+                pv_a = pv_a.to(device, non_blocking=True)
+                pv_p = pv_p.to(device, non_blocking=True)
+                pv_n = pv_n.to(device, non_blocking=True)
+                g_a = g_a.to(device, non_blocking=True)
+                g_p = g_p.to(device, non_blocking=True)
+                g_n = g_n.to(device, non_blocking=True)
+                with torch.set_grad_enabled(args.unfreeze_backbone):
+                    feat_a = extract_pooled_features(backbone, pv_a, image_grid_thw=g_a)
+                    feat_p = extract_pooled_features(backbone, pv_p, image_grid_thw=g_p)
+                    feat_n = extract_pooled_features(backbone, pv_n, image_grid_thw=g_n)
+            else:
+                anchors = anchors.to(device, non_blocking=True)
+                positives = positives.to(device, non_blocking=True)
+                negatives = negatives.to(device, non_blocking=True)
+                with torch.set_grad_enabled(args.unfreeze_backbone):
+                    feat_a = extract_pooled_features(backbone, anchors)
+                    feat_p = extract_pooled_features(backbone, positives)
+                    feat_n = extract_pooled_features(backbone, negatives)
 
             emb_a = head(feat_a)
             emb_p = head(feat_p)

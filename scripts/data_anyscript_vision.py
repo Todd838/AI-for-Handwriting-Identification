@@ -25,10 +25,15 @@ class TripletPageDataset(Dataset):
         by_author: Dict[str, List[PageRecord]],
         transform=None,
         steps_per_epoch: int = 100000,
+        *,
+        skip_pixel_tensors: bool = False,
     ):
         self.by_author = by_author
         self.authors = list(by_author.keys())
-        self.transform = transform or default_transform()
+        self.transform = transform
+        self.skip_pixel_tensors = skip_pixel_tensors
+        if not skip_pixel_tensors:
+            self.transform = self.transform or default_transform()
         self.steps_per_epoch = steps_per_epoch
         if len(self.authors) < 2:
             raise ValueError("Need at least 2 authors to sample triplets.")
@@ -56,10 +61,17 @@ class TripletPageDataset(Dataset):
             neg_author = random.choice(self.authors)
         negative_rec = random.choice(self.by_author[neg_author])
 
+        if self.skip_pixel_tensors:
+            anchor = positive = negative = torch.empty(0)
+        else:
+            anchor = self._load(anchor_rec.page_path)
+            positive = self._load(positive_rec.page_path)
+            negative = self._load(negative_rec.page_path)
+
         return {
-            "anchor": self._load(anchor_rec.page_path),
-            "positive": self._load(positive_rec.page_path),
-            "negative": self._load(negative_rec.page_path),
+            "anchor": anchor,
+            "positive": positive,
+            "negative": negative,
             "anchor_author": anchor_rec.author_id,
             "positive_author": positive_rec.author_id,
             "negative_author": negative_rec.author_id,

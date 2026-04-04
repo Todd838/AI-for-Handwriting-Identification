@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -176,12 +176,19 @@ def vision_backbone_kwargs_from_args(args: Any) -> Dict[str, Any]:
 
 
 def get_backbone_hidden_size(model: nn.Module, fallback: int = 1024) -> int:
-    hidden_size = getattr(getattr(model, "config", None), "hidden_size", None)
+    cfg = getattr(model, "config", None)
+    hidden_size = getattr(cfg, "hidden_size", None)
     if isinstance(hidden_size, int):
         return hidden_size
-    vision_config = getattr(getattr(model, "config", None), "vision_config", None)
-    if vision_config is not None and hasattr(vision_config, "hidden_size"):
-        return int(vision_config.hidden_size)
+    vision_config = getattr(cfg, "vision_config", None)
+    if vision_config is not None:
+        # GLM-OCR vision merger output dim (matches get_image_features / LM input width)
+        ohs = getattr(vision_config, "out_hidden_size", None)
+        if isinstance(ohs, int):
+            return int(ohs)
+        vh = getattr(vision_config, "hidden_size", None)
+        if isinstance(vh, int):
+            return int(vh)
     return fallback
 
 
@@ -204,6 +211,28 @@ def maybe_apply_lora(model: nn.Module, lora_r: int = 16) -> nn.Module:
         return model
 
 
+def vision_uses_glm_image_processor(model: nn.Module) -> bool:
+    """GlmOcr* needs HF processor pixel_values + image_grid_thw (not raw torchvision tensors)."""
+    core = model.module if hasattr(model, "module") else model
+    return callable(getattr(core, "get_image_features", None))
+
+
+def glm_vision_inputs_from_pils(processor: Any, pil_images: List[Any]) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Run GLM-OCR / Glm46V processor to patch-grid inputs expected by get_image_features."""
+    if processor is None:
+        raise ValueError("GLM-OCR requires the AutoProcessor returned with the vision backbone.")
+    inputs = processor(images=pil_images, return_tensors="pt")
+    try:
+        pv = inputs["pixel_values"]
+        grid = inputs["image_grid_thw"]
+    except Exception as e:
+        raise KeyError(
+            f"Processor output must include pixel_values and image_grid_thw; got {type(inputs)} keys "
+            f"{list(inputs.keys()) if hasattr(inputs, 'keys') else inputs}"
+        ) from e
+    return pv, grid
+
+
 def _vision_forward(core: nn.Module, pixel_values: torch.Tensor):
     if hasattr(core, "vision_encoder"):
         return core.vision_encoder(pixel_values)
@@ -218,12 +247,44 @@ def _vision_forward(core: nn.Module, pixel_values: torch.Tensor):
     return core(pixel_values=pixel_values)
 
 
-def extract_pooled_features(model: nn.Module, pixel_values: torch.Tensor) -> torch.Tensor:
+def _pooled_features_from_glm_image_features(model: nn.Module, pixel_values: torch.Tensor, image_grid_thw: torch.Tensor):
+    core = model.module if hasattr(model, "module") else model
+    out = core.get_image_features(
+        pixel_values=pixel_values,
+        image_grid_thw=image_grid_thw,
+        return_dict=True,
+    )
+    chunks = out.pooler_output
+    if isinstance(chunks, (tuple, list)):
+        return torch.stack([c.float().mean(dim=0) for c in chunks], dim=0)
+    if chunks.ndim == 2:
+        return chunks.mean(dim=0, keepdim=True)
+    raise RuntimeError(f"Unexpected GLM pooler_output layout: {type(chunks)} {getattr(chunks, 'shape', None)}")
+
+
+def extract_pooled_features(
+    model: nn.Module,
+    pixel_values: torch.Tensor,
+    *,
+    image_grid_thw: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
     """
     Pooled visual features [B, D] for triplet / FAISS training.
-    Supports GLM-OCR-style vision_encoder and common DeepSeek / HF vision layouts.
+    GLM-OCR: pass processor outputs as ``pixel_values`` + ``image_grid_thw``.
+    Other backbones: ``pixel_values`` only (torchvision-style tensors).
     """
     core = model.module if hasattr(model, "module") else model
+
+    if image_grid_thw is not None:
+        return _pooled_features_from_glm_image_features(model, pixel_values, image_grid_thw)
+
+    if callable(getattr(core, "get_image_features", None)):
+        raise ValueError(
+            "This backbone (e.g. GLM-OCR) requires HF processor inputs: call "
+            "glm_vision_inputs_from_pils(processor, images) and pass image_grid_thw=... "
+            "into extract_pooled_features."
+        )
+
     out = _vision_forward(core, pixel_values)
 
     if hasattr(out, "last_hidden_state"):
@@ -244,6 +305,9 @@ def encode_batch(
     head: nn.Module,
     images: torch.Tensor,
     device: torch.device,
+    *,
+    image_grid_thw: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
-    feats = extract_pooled_features(model, images.to(device))
+    grid_dev = image_grid_thw.to(device) if image_grid_thw is not None else None
+    feats = extract_pooled_features(model, images.to(device), image_grid_thw=grid_dev)
     return head(feats)

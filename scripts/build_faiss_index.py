@@ -15,8 +15,10 @@ from modeling_writer import (
     add_vision_backbone_cli_args,
     encode_batch,
     get_backbone_hidden_size,
+    glm_vision_inputs_from_pils,
     load_vision_backbone,
     vision_backbone_kwargs_from_args,
+    vision_uses_glm_image_processor,
 )
 
 
@@ -49,13 +51,14 @@ def main():
 
     ckpt = torch.load(args.checkpoint, map_location="cpu")
     model_name = args.model_name or ckpt.get("model_name", "zai-org/GLM-OCR")
-    model, _, _ = load_vision_backbone(
+    model, hf_processor, _ = load_vision_backbone(
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
         **vision_backbone_kwargs_from_args(args),
     )
     model = model.to(device)
+    use_glm = vision_uses_glm_image_processor(model)
     model.eval()
     for p in model.parameters():
         p.requires_grad = False
@@ -75,11 +78,19 @@ def main():
     for start in tqdm(range(0, n, args.batch_size), desc="embedding pages"):
         end = min(n, start + args.batch_size)
         batch_recs = all_records[start:end]
-        tensors = [tfm(Image.open(r.page_path).convert("RGB")) for r in batch_recs]
-        batch = torch.stack(tensors, dim=0)
-        del tensors
+        pils = [Image.open(r.page_path).convert("RGB") for r in batch_recs]
+        if use_glm:
+            batch, grid = glm_vision_inputs_from_pils(hf_processor, pils)
+        else:
+            tensors = [tfm(p) for p in pils]
+            batch = torch.stack(tensors, dim=0)
+            del tensors
+            grid = None
+        del pils
         with torch.no_grad():
-            emb = encode_batch(model=model, head=head, images=batch, device=device)
+            emb = encode_batch(
+                model=model, head=head, images=batch, device=device, image_grid_thw=grid
+            )
         index.add(emb.cpu().numpy().astype("float32"))
         for r in batch_recs:
             meta.append((r.author_id, r.book_id, r.page_path))

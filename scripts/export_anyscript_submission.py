@@ -108,6 +108,7 @@ def load_checkpoint_bundle(args):
         get_backbone_hidden_size,
         load_vision_backbone,
         vision_backbone_kwargs_from_args,
+        vision_uses_glm_image_processor,
     )
 
     if not args.gallery_data_root or not args.query_data_root:
@@ -115,13 +116,14 @@ def load_checkpoint_bundle(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt = torch.load(args.checkpoint, map_location="cpu")
     model_name = args.model_name or ckpt.get("model_name", "zai-org/GLM-OCR")
-    model, _, _ = load_vision_backbone(
+    model, hf_processor, _ = load_vision_backbone(
         model_name=model_name,
         load_in_4bit=args.load_in_4bit,
         prefer_unsloth=not args.no_unsloth,
         **vision_backbone_kwargs_from_args(args),
     )
     model = model.to(device)
+    use_glm = vision_uses_glm_image_processor(model)
     model.eval()
     for p in model.parameters():
         p.requires_grad = False
@@ -139,10 +141,24 @@ def load_checkpoint_bundle(args):
         raise ValueError("No pages under query_data_root")
 
     qe, qm = embed_records(
-        query_records, model, head, args.image_size, args.batch_size, device
+        query_records,
+        model,
+        head,
+        args.image_size,
+        args.batch_size,
+        device,
+        hf_processor=hf_processor,
+        use_glm=use_glm,
     )
     ge, gm = embed_records(
-        gallery_records, model, head, args.image_size, args.batch_size, device
+        gallery_records,
+        model,
+        head,
+        args.image_size,
+        args.batch_size,
+        device,
+        hf_processor=hf_processor,
+        use_glm=use_glm,
     )
     return qe, qm, ge, gm
 
