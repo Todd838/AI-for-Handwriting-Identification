@@ -90,19 +90,47 @@ def _ordered_candidates() -> list[str]:
     return ordered
 
 
+def _warn_if_ephemeral_colab_data() -> None:
+    """
+    Warn when dataset appears under /content (ephemeral VM disk), which is wiped on reset.
+    """
+    volatile_hints = [
+        "/content/AnyScriptFiltered",
+        "/content/data/datasets/AnyScriptFiltered/binarized/train",
+        "/content/data/datasets/AnyScriptFiltered/binarized",
+        "/content/AnyScriptFiltered/binarized/train",
+        "/content/AnyScriptFiltered/train",
+        "/content/AnyScriptFiltered/binarized",
+    ]
+    volatile_pick = next((p for p in volatile_hints if _triplet_usable(p)), None)
+    if not volatile_pick:
+        return
+    print("\nWARNING: detected usable dataset under /content (temporary runtime storage):")
+    print(" ", volatile_pick)
+    print("This folder is deleted when Colab runtime resets/restarts.")
+    print("Extract to Google Drive instead (persistent), for example:")
+    print('  !tar -xzf "/content/drive/MyDrive/AnyScriptFiltered/AnyScriptFiltered.tar.gz" -C "/content/drive/MyDrive"')
+
+
 CANDIDATES = _ordered_candidates()
 DATA_ROOT = FIXED_CANDIDATES[0]
 
+picked = next((p for p in CANDIDATES if _triplet_usable(p)), None)
 ARCHIVE = next((p for p in ARCHIVE_PATHS if os.path.isfile(p)), None)
-if ARCHIVE:
+
+if picked:
+    # Fast path: extracted dataset already exists on Drive from a prior session.
+    print("Found existing extracted dataset; skipping tar extract.")
+elif ARCHIVE:
     print("Extracting from", ARCHIVE, "(long run; needs Drive space)...")
     os.makedirs(EXTRACT_PARENT, exist_ok=True)
     subprocess.run(["tar", "-xzf", ARCHIVE, "-C", EXTRACT_PARENT], check=False)
+    CANDIDATES = _ordered_candidates()
+    picked = next((p for p in CANDIDATES if _triplet_usable(p)), None)
 else:
     print("No archive at:", ARCHIVE_PATHS)
+    _warn_if_ephemeral_colab_data()
 
-CANDIDATES = _ordered_candidates()
-picked = next((p for p in CANDIDATES if _triplet_usable(p)), None)
 if picked:
     DATA_ROOT = picked
     print("OK: DATA_ROOT (auto) ->", DATA_ROOT)
