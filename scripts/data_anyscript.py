@@ -226,6 +226,30 @@ def build_records(data_root: str) -> List[PageRecord]:
     return records
 
 
+def looks_like_anyscript_related_path(path: str) -> bool:
+    """Heuristic: path is probably this challenge's data, not another Kaggle project."""
+    norm = path.replace("\\", "/").lower()
+    keys = (
+        "anyscript",
+        "binarized",
+        "icdar",
+        "handwrit",
+        "writer_id",
+        "writer-id",
+        "datasets/anyscript",
+    )
+    return any(k in norm for k in keys)
+
+
+def colab_anyscript_archive_candidates(drive_my_drive: str = "/content/drive/MyDrive") -> List[str]:
+    """Where users often upload AnyScriptFiltered.tar.gz on Colab (try in order)."""
+    d = drive_my_drive.rstrip(os.sep)
+    return [
+        f"{d}/AnyScriptFiltered/AnyScriptFiltered.tar.gz",
+        f"{d}/AnyScriptFiltered.tar.gz",
+    ]
+
+
 def colab_drive_data_root_candidates(drive_my_drive: str = "/content/drive/MyDrive") -> List[str]:
     """Ordered paths to try for AnyScript images on Google Colab + Drive."""
     d = drive_my_drive.rstrip(os.sep)
@@ -297,8 +321,8 @@ def resolve_colab_data_root(my_drive: str = "/content/drive/MyDrive") -> Optiona
     """
     Resolve a folder suitable for triplet training on Colab + Drive.
 
-    Tries fixed paths first, then searches (bounded BFS) for subfolders named
-    ``binarized`` or ``train`` under ``my_drive``.
+    Tries fixed paths first, then bounded BFS for ``binarized`` dirs, and ``train`` only if
+    the path looks AnyScript-related (avoids picking unrelated image projects on Drive).
     """
     ordered: List[str] = []
     seen: Set[str] = set()
@@ -315,9 +339,12 @@ def resolve_colab_data_root(my_drive: str = "/content/drive/MyDrive") -> Optiona
         return hit
 
     if os.path.isdir(my_drive):
-        for label in ("binarized", "train", "Train"):
+        for p in _find_immediate_subdirs_named(my_drive, "binarized"):
+            add(p)
+        for label in ("train", "Train"):
             for p in _find_immediate_subdirs_named(my_drive, label):
-                add(p)
+                if looks_like_anyscript_related_path(p):
+                    add(p)
     hit = first_triplet_usable_data_root(ordered)
     if hit:
         return hit

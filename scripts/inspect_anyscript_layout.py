@@ -14,7 +14,7 @@ import os
 import sys
 
 # Same package as training (run from repo scripts/ or set PYTHONPATH).
-from data_anyscript import build_records, group_by_author
+from data_anyscript import build_records, group_by_author, looks_like_anyscript_related_path
 
 
 def report(label: str, root: str) -> int:
@@ -37,6 +37,11 @@ def main() -> None:
         type=int,
         default=2,
         help="How deep to try single-child descent hints (default 2).",
+    )
+    p.add_argument(
+        "--force-unrelated-scan",
+        action="store_true",
+        help="Scan all My Drive siblings (can suggest wrong datasets e.g. other Kaggle projects).",
     )
     args = p.parse_args()
     root = os.path.expanduser(args.root)
@@ -85,43 +90,67 @@ def main() -> None:
                     best_n = n
                     best_path = sub2
 
-    # Official tarball often extracts to MyDrive/data/datasets/... (not under AnyScriptFiltered/)
-    if best_n == 0:
+    tgz_here = [
+        os.path.join(root, f)
+        for f in children
+        if f.endswith(".tar.gz") or f.endswith(".tgz")
+    ]
+
+    # Only archives: extract first — do not suggest unrelated Drive folders.
+    if best_n == 0 and tgz_here:
         parent = os.path.dirname(root.rstrip(os.sep))
-        if parent and os.path.isdir(parent):
-            print(
-                f"\nNo pages under {root!r}. Scanning siblings under {parent!r} "
-                "(common after `tar` extract into MyDrive)...\n"
-            )
-            root_abs = os.path.abspath(root)
-            for name in sorted(os.listdir(parent))[:50]:
-                sub = os.path.join(parent, name)
-                if not os.path.isdir(sub) or os.path.abspath(sub) == root_abs:
+        print("\n*** No image folders here — only archive(s). Extract first, for example:\n")
+        for ap in tgz_here:
+            print(f'  !tar -xzf "{ap}" -C "{parent}"')
+        print(
+            "\n(Official tarball usually creates .../data/datasets/AnyScriptFiltered/binarized)\n"
+            "Then re-run the dataset cell or this script.\n\n---"
+        )
+        sys.exit(2)
+
+    # Official tarball often extracts to MyDrive/data/datasets/... (not under AnyScriptFiltered/)
+    if best_n == 0 and (parent := os.path.dirname(root.rstrip(os.sep))) and os.path.isdir(parent):
+        print(
+            f"\nNo pages under {root!r}. Scanning siblings under {parent!r} "
+            "(AnyScript-related paths only; use --force-unrelated-scan for full Drive)...\n"
+        )
+        root_abs = os.path.abspath(root)
+        for name in sorted(os.listdir(parent))[:50]:
+            sub = os.path.join(parent, name)
+            if not os.path.isdir(sub) or os.path.abspath(sub) == root_abs:
+                continue
+            if not args.force_unrelated_scan and not looks_like_anyscript_related_path(sub):
+                continue
+            n = report(f"MyDrive sibling {name!r}", sub)
+            if n > best_n:
+                best_n, best_path = n, sub
+            for name2 in sorted(os.listdir(sub))[:40]:
+                sub2 = os.path.join(sub, name2)
+                if not os.path.isdir(sub2):
                     continue
-                n = report(f"MyDrive sibling {name!r}", sub)
-                if n > best_n:
-                    best_n, best_path = n, sub
-                for name2 in sorted(os.listdir(sub))[:40]:
-                    sub2 = os.path.join(sub, name2)
-                    if not os.path.isdir(sub2):
+                if not args.force_unrelated_scan and not looks_like_anyscript_related_path(sub2):
+                    continue
+                n2 = report(f"  nested {name}/{name2!r}", sub2)
+                if n2 > best_n:
+                    best_n, best_path = n2, sub2
+                for name3 in sorted(os.listdir(sub2))[:30]:
+                    sub3 = os.path.join(sub2, name3)
+                    if not os.path.isdir(sub3):
                         continue
-                    n2 = report(f"  nested {name}/{name2!r}", sub2)
-                    if n2 > best_n:
-                        best_n, best_path = n2, sub2
-                    for name3 in sorted(os.listdir(sub2))[:30]:
-                        sub3 = os.path.join(sub2, name3)
-                        if not os.path.isdir(sub3):
+                    if not args.force_unrelated_scan and not looks_like_anyscript_related_path(sub3):
+                        continue
+                    n3 = report(f"    {name}/{name2}/{name3!r}", sub3)
+                    if n3 > best_n:
+                        best_n, best_path = n3, sub3
+                    for name4 in sorted(os.listdir(sub3))[:25]:
+                        sub4 = os.path.join(sub3, name4)
+                        if not os.path.isdir(sub4):
                             continue
-                        n3 = report(f"    {name}/{name2}/{name3!r}", sub3)
-                        if n3 > best_n:
-                            best_n, best_path = n3, sub3
-                        for name4 in sorted(os.listdir(sub3))[:25]:
-                            sub4 = os.path.join(sub3, name4)
-                            if not os.path.isdir(sub4):
-                                continue
-                            n4 = report(f"      .../{name4!r}", sub4)
-                            if n4 > best_n:
-                                best_n, best_path = n4, sub4
+                        if not args.force_unrelated_scan and not looks_like_anyscript_related_path(sub4):
+                            continue
+                        n4 = report(f"      .../{name4!r}", sub4)
+                        if n4 > best_n:
+                            best_n, best_path = n4, sub4
 
     print("\n---")
     if best_n == 0:
