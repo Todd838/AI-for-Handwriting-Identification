@@ -2,8 +2,8 @@
 ICDAR 2026 — Long-Term Handwriting Author Identification (AnyScript Challenge)
 
 Query-by-example retrieval: given a query page or book, rank training items by same author.
-Tracks: intra-book (query pages → training pages) and extra-book (query books → training books).
-Submission CSV columns: query_document_id, retrieved_document_id, similarity_score
+Tracks: intra-book (query pages -> training pages) and extra-book (query books -> training pages).
+Submission CSV columns: query_image, retrieved_image, similarity
 
 This module expects an *extracted* dataset tree: {data_root}/{author_id}/{book_id}/<page images>.
 The official release is often shipped as a .tar.gz; extract it locally, then point build_records()
@@ -25,11 +25,11 @@ import numpy as np
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 
-# Official submission header (ICDAR 2026 AnyScript). Intra-book: page IDs; extra-book: book IDs.
+# Official submission header (ICDAR 2026 AnyScript portal): query_image,retrieved_image,similarity.
 ANYSCRIPT_SUBMISSION_FIELDS = (
-    "query_document_id",
-    "retrieved_document_id",
-    "similarity_score",
+    "query_image",
+    "retrieved_image",
+    "similarity",
 )
 
 # Local AnyScript filtered archive. Override with env ANYSCRIPT_FILTERED_ARCHIVE.
@@ -68,7 +68,7 @@ def anyscript_data_root() -> str:
 def write_anyscript_submission_csv(out_path: str, rows: Iterable[Tuple[str, str, float]]) -> None:
     """
     Write submission CSV with required columns only, in order:
-    query_document_id, retrieved_document_id, similarity_score.
+    query_image, retrieved_image, similarity.
 
     Callers must supply the full query×training score table and official IDs; see README.md
     (section “ICDAR 2026 AnyScript — platform submission”).
@@ -80,9 +80,9 @@ def write_anyscript_submission_csv(out_path: str, rows: Iterable[Tuple[str, str,
         for query_id, retrieved_id, score in rows:
             writer.writerow(
                 {
-                    "query_document_id": query_id,
-                    "retrieved_document_id": retrieved_id,
-                    "similarity_score": score,
+                    "query_image": query_id,
+                    "retrieved_image": retrieved_id,
+                    "similarity": score,
                 }
             )
 

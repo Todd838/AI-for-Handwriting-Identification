@@ -2,7 +2,7 @@
 Build dense ICDAR 2026 AnyScript submission CSVs:
 
 - intra_book: every query page x every training page (cosine similarity from embeddings)
-- extra_book: every query book x every training book (mean L2-normalized page embeddings per book)
+- extra_book: every query book x every training page (query book from mean L2-normalized page embeddings)
 
 Official platform IDs come from JSON (list aligned with embedding order, or dict keyed by
 page_relative_key / book_key). See README.
@@ -208,8 +208,9 @@ def main():
         q_prefix, g_prefix = "query_page", "train_page"
     else:
         q_embs, q_keys = aggregate_book_embeddings(qe, qm)
-        g_embs, g_keys = aggregate_book_embeddings(ge, gm)
-        q_prefix, g_prefix = "query_book", "train_book"
+        g_embs = ge
+        g_keys = meta_page_keys(gm, gallery_key_root)
+        q_prefix, g_prefix = "query_book", "train_page"
 
     query_ids = resolve_competition_ids(
         q_keys,

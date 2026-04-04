@@ -78,9 +78,9 @@ The competition expects a **dense similarity table**: for **each** official quer
 | Track | Queries | Gallery | Row meaning |
 | --- | --- | --- | --- |
 | **Intra-book** | Held-out query **pages** | All training **pages** | Page-to-page scores |
-| **Extra-book** | Held-out query **books** | All training **books** | Book-to-book scores |
+| **Extra-book** | Held-out query **books** | All training **pages** | Book-to-page scores |
 
-**Columns (exact names, in order):** `query_document_id`, `retrieved_document_id`, `similarity_score`.
+**Columns (exact names, in order):** `query_image`, `retrieved_image`, `similarity`.
 
 **IDs:** Use the **exact** query and training identifiers from the challenge README / dataset package (e.g. `query_page_001`, `train_page_1234` — illustrations only; your release may differ). Your retrieval or embedding code must map filesystem paths or internal keys to those official strings.
 
@@ -111,7 +111,7 @@ python export_anyscript_submission.py --mode intra_book \
   --out_csv /path/to/submission_intra.csv
 ```
 
-`--mode extra_book` aggregates **L2-normalized mean** page embeddings per `(author_id, book_id)` before scoring.
+`--mode extra_book` aggregates each query book as an **L2-normalized mean** page embedding, then scores it against **all training pages**.
 
 **From precomputed embeddings** (e.g. after editing `export_embeddings_split` to use the full training set):
 
@@ -129,8 +129,8 @@ python export_anyscript_submission.py --mode intra_book \
 
 **ID JSON formats** (either file can use either shape):
 
-1. **List** — length must match embedding row order (query order = `query_meta` rows; gallery = `gallery_meta` rows; for extra-book, books sorted by `author_id/book_id`). With `export_embeddings_split.py`, records are **sorted** before shuffling and the default **`--shuffle_seed 42`** makes that order reproducible across runs; use **`--random_shuffle`** only if you accept non-reproducible splits (then prefer dict id JSON).
-2. **Object** — maps each key to the platform id, e.g. `"some_author/some_book/page_01.jpg": "query_page_001"` or `"some_author/some_book": "train_book_042"`.
+1. **List** — length must match embedding row order (query order = `query_meta` rows for intra-book, or query books sorted by `author_id/book_id` for extra-book; gallery order = `gallery_meta` rows/pages for both modes). With `export_embeddings_split.py`, records are **sorted** before shuffling and the default **`--shuffle_seed 42`** makes that order reproducible across runs; use **`--random_shuffle`** only if you accept non-reproducible splits (then prefer dict id JSON).
+2. **Object** — maps each key to the platform id, e.g. `"some_author/some_book/page_01.jpg": "query_page_001"` (or `"train_page_042"`) and `"some_author/some_book": "query_book_123"` for extra-book queries.
 
 For dry runs without official ids: add `--allow_synthetic_ids` (emits placeholders like `query_page_000000`, `train_page_000001`).
 
