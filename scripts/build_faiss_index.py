@@ -50,6 +50,17 @@ def parse_args():
     p.add_argument("--index_out", type=str, required=True)
     p.add_argument("--meta_out", type=str, required=True)
     p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from existing --index_out/--meta_out if present (same data_root/filter required).",
+    )
+    p.add_argument(
+        "--save_every_batches",
+        type=int,
+        default=25,
+        help="Persist partial index/meta every N batches (0 disables periodic saves).",
+    )
+    p.add_argument(
         "--all_pages",
         action="store_true",
         help="Index every page from data_root. Default: only authors with 2+ pages (triplet training filter).",
@@ -70,6 +81,12 @@ def _reject_placeholder_paths(pairs) -> None:
                 "For --data_root use the word auto or a full path (not {{DATA_ROOT}}). "
                 "For checkpoint and outputs use real paths or a Python subprocess with f-strings."
             )
+
+
+def _save_progress(index, meta, index_out: str, meta_out: str) -> None:
+    """Persist partial progress so long Colab runs can resume after disconnect."""
+    faiss.write_index(index, index_out)
+    np.save(meta_out, np.array(meta, dtype=object))
 
 
 def main():
@@ -122,10 +139,47 @@ def main():
         f"({'all' if args.all_pages else 'authors with 2+ pages only'})"
     )
     tfm = default_transform(args.image_size)
+    n = len(all_records)
+    if n == 0:
+        raise ValueError("No pages found to index under resolved data_root.")
+
     index = faiss.IndexFlatIP(args.embed_dim)
     meta: List[tuple] = []
-    n = len(all_records)
-    for start in tqdm(range(0, n, args.batch_size), desc="embedding batches"):
+    start = 0
+    if args.resume and os.path.isfile(args.index_out) and os.path.isfile(args.meta_out):
+        index = faiss.read_index(args.index_out)
+        loaded_meta = np.load(args.meta_out, allow_pickle=True).tolist()
+        meta = [tuple(x) for x in loaded_meta]
+        start = len(meta)
+        if index.ntotal != start:
+            raise ValueError(
+                f"Resume mismatch: index vectors={index.ntotal} but meta rows={start}. "
+                "Delete stale outputs or disable --resume."
+            )
+        if start > n:
+            raise ValueError(
+                f"Resume mismatch: existing meta rows ({start}) exceed records to index ({n}). "
+                "Delete stale outputs or disable --resume."
+            )
+        if start > 0:
+            last = meta[-1]
+            expected = all_records[start - 1]
+            expected_last = (expected.author_id, expected.book_id, expected.page_path)
+            if last != expected_last:
+                raise ValueError(
+                    "Resume mismatch: last stored metadata row does not match current record order. "
+                    "Use the same --data_root/--all_pages setting, or delete stale outputs."
+                )
+        print(f"Resuming from {start}/{n} pages already indexed.")
+
+    if start >= n:
+        print("Index already complete; nothing to do.")
+        print(f"Saved FAISS index: {args.index_out}")
+        print(f"Saved metadata: {args.meta_out}")
+        return
+
+    batch_count = 0
+    for start in tqdm(range(start, n, args.batch_size), desc="embedding batches"):
         end = min(n, start + args.batch_size)
         batch_recs = all_records[start:end]
         pils = [Image.open(r.page_path).convert("RGB") for r in batch_recs]
@@ -144,9 +198,12 @@ def main():
         index.add(emb.cpu().numpy().astype("float32"))
         for r in batch_recs:
             meta.append((r.author_id, r.book_id, r.page_path))
+        batch_count += 1
+        if args.save_every_batches > 0 and (batch_count % args.save_every_batches == 0):
+            _save_progress(index, meta, args.index_out, args.meta_out)
+            print(f"Checkpointed progress: {len(meta)}/{n} pages")
 
-    faiss.write_index(index, args.index_out)
-    np.save(args.meta_out, np.array(meta, dtype=object))
+    _save_progress(index, meta, args.index_out, args.meta_out)
     print(f"Saved FAISS index: {args.index_out}")
     print(f"Saved metadata: {args.meta_out}")
 
